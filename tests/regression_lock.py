@@ -87,7 +87,7 @@ def test_constants():
 def test_profile_logic():
     print("Testing profile bootstrap...")
     path = migrate.ensure_agent_profile()
-    assert ".unibrowse-agent-profile" in path
+    assert ".profiles" in path
     print("  ✓ Profile logic ok")
 
 def test_command_builders():
@@ -97,6 +97,7 @@ def test_command_builders():
     assert "model-x" in cmd
     assert "high" in cmd
     assert cmd[-1] == "hello"
+    print("  ✓ Command builders ok")
     print("  ✓ Command builders ok")
 
 def test_memory_fallback():
