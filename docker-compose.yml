@@ -1,0 +1,16 @@
+services:
+  agent-server:
+    build:
+      context: ..
+      dockerfile: unibrowse/Dockerfile.server
+    ports:
+      - "9223:9223"
+      - "37700-37800:37700-37800"
+    volumes:
+      - ../.profiles:/app/.profiles
+      - ../.memories:/app/.memories
+      - ../browser-harness/agent-workspace:/app/browser-harness/agent-workspace
+    environment:
+      - BH_NO_ACTIVATE=1
+      - BU_NAME=remote-agent
+    restart: unless-stopped

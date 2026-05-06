@@ -1,0 +1,34 @@
+FROM python:3.11-slim-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:99
+ENV PYTHONUNBUFFERED=1
+
+# Install Chrome, Xvfb, Node.js (for Claude Mem), and system deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget gnupg git curl ca-certificates rsync xvfb x11-utils \
+    libgl1-mesa-glx libpulse0 libxcb-icccm4 libxcb-image0 \
+    libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+    libxcb-shape0 libxcb-xfixes0 libxkbcommon-x11-0 \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update && apt-get install -y google-chrome-stable \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . /app
+
+# Install dependencies
+RUN pip install --no-cache-dir keyring PySide6 cryptography
+RUN pip install -e ./browser-harness
+RUN npm install -g claude-mem
+
+EXPOSE 9223
+# Claude Mem default port is also useful to expose if needed
+EXPOSE 37700-37800
+
+RUN chmod +x /app/unibrowse/start.sh
+
+ENTRYPOINT ["/app/unibrowse/start.sh"]
