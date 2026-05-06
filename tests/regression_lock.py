@@ -93,6 +93,8 @@ def test_profile_logic():
 def test_command_builders():
     print("Testing command builders...")
     cmd = app.run_unibrowse_backend("hello", "model-x", "high")
+    # Verify that it correctly resolves to 'opencode'
+    assert cmd[0].endswith("opencode")
     assert "--model" in cmd
     assert "model-x" in cmd
     assert "high" in cmd
