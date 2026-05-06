@@ -34,3 +34,11 @@ The GUI will send browser-harness/unibrowse commands to that CDP endpoint instea
 - Any other text is sent to `unibrowse run` with browser-harness stealth environment variables.
 - The model field defaults to `google/antigravity-gemini-3-flash`. Edit it if your unibrowse provider uses a different exact model ID.
 - The progress panel shows concise task/reasoning summaries, not private chain-of-thought.
+
+## Credits & Acknowledgements
+
+- **[browser-harness](https://github.com/browser-harness):** The core engine for stealth browser automation.
+- **[OpenCode](https://github.com/opencode):** The foundational agent runtime and execution environment.
+- **[Claude-Mem](https://github.com/claude-mem):** Advanced memory and context management for persistent agent learning.
+- **[QuiverAI](https://quiver.ai):** Logo designed with Arrow.
+- **Antigravity:** Authored by the Antigravity agentic coding assistant.
