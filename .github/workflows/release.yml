@@ -29,9 +29,14 @@ jobs:
         run: |
           echo "${{ github.ref_name }}" > assets/version.txt
 
+      - name: Generate Icon
+        run: |
+          python make_icon.py assets/logo.svg unibrowse.iconset
+          iconutil -c icns unibrowse.iconset -o assets/icon.icns
+
       - name: Build with PyInstaller
         run: |
-          python -m PyInstaller --name "unibrowse" --windowed --add-data "assets:assets" app.py
+          python -m PyInstaller --name "unibrowse" --windowed --add-data "assets:assets" --icon "assets/icon.icns" app.py
 
       - name: Create Artifact
         run: |
