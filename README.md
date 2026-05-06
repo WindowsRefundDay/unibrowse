@@ -14,8 +14,10 @@
 Launch app:
 
 ```bash
-open "$HOME/Applications/unibrowse.app"
+open "/Applications/unibrowse.app"
 ```
+
+You can also find **unibrowse** in your macOS Applications folder and add it to your Dock.
 
 ## Remote Mode
 
@@ -37,8 +39,9 @@ The GUI will send browser-harness/unibrowse commands to that CDP endpoint instea
 
 ## Credits & Acknowledgements
 
-- **[browser-harness](https://github.com/browser-harness):** The core engine for stealth browser automation.
-- **[OpenCode](https://github.com/opencode):** The foundational agent runtime and execution environment.
-- **[Claude-Mem](https://github.com/claude-mem):** Advanced memory and context management for persistent agent learning.
+- **[browser-harness](https://github.com/browser-harness/browser-harness):** The core engine for stealth browser automation.
+- **[OpenCode](https://github.com/opencode-run/opencode):** The foundational agent runtime and execution environment.
+- **[Claude-Mem](https://github.com/claude-mem/claude-mem):** Advanced memory and context management for persistent agent learning.
+- **[PySide6](https://doc.qt.io/qtforpython-6/):** The framework powering the cross-platform GUI.
 - **Antigravity:** Authored by the Antigravity agentic coding assistant.
 

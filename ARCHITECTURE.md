@@ -4,7 +4,7 @@ This document describes the high-level architecture of **unibrowse**, a dock-lau
 
 ## System Overview
 
-unibrowse acts as a bridge between the user and powerful automation engines like `browser-harness` and `opencode`. It provides a graphical interface for real-time observation and control while maintaining a stealthy, non-disruptive browser environment.
+unibrowse acts as a bridge between the user and powerful automation engines like [browser-harness](https://github.com/browser-harness/browser-harness) and [opencode](https://github.com/opencode-run/opencode). It provides a graphical interface for real-time observation and control while maintaining a stealthy, non-disruptive browser environment.
 
 ```mermaid
 graph TD
