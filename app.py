@@ -35,6 +35,18 @@ USER_CARD_PATH = os.path.join(AGENT_WORKSPACE, "user_card.md")
 BROWSER_PORT = "9223"
 BU_CDP_URL = f"http://127.0.0.1:{BROWSER_PORT}"
 SCREENSHOT_PATH = "/tmp/unibrowse-live.png"
+
+def get_version():
+    try:
+        v_path = os.path.join(APP_DIR, "assets", "version.txt")
+        if os.path.exists(v_path):
+            with open(v_path, "r") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return "v0.0.1-dev"
+
+VERSION = get_version()
 DEFAULT_MODEL = os.environ.get("UNIBROWSE_MODEL", "google/antigravity-gemini-3-flash")
 DEFAULT_VARIANT = os.environ.get("UNIBROWSE_VARIANT", "")
 DEFAULT_PATH = ":".join(
@@ -227,7 +239,7 @@ class UnibrowseApp(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("unibrowse")
+        self.setWindowTitle(f"unibrowse {VERSION}")
         self.setWindowIcon(QIcon(os.path.join(APP_DIR, "assets", "logo.svg")))
         self.setMinimumSize(1280, 820)
         self.initialize_state()
@@ -529,7 +541,7 @@ class UnibrowseApp(QMainWindow):
             self.progress_signal.emit("Mode: local backend. Dedicated Chrome profile will be used.")
 
     def init_agent(self):
-        self.append_activity("Initializing unibrowse...", "agent")
+        self.append_activity(f"Initializing unibrowse {VERSION}...", "agent")
         self.append_activity("Thinking: prepare a stealth browser session without focusing Chrome.", "progress")
         self.append_activity("Task: prepare agent profile. Full profile sync is on demand.", "progress")
         self.append_activity(f"Model preference: {self.model_field.text().strip() or 'unibrowse default'}", "progress")
