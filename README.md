@@ -1,6 +1,6 @@
 # <img src="assets/logo.svg" width="48" height="48" valign="middle"> unibrowse
 
-**unibrowse** is a frontend for a compilation of advanced automation tools: `browser-harness`, `unibrowse-run` (the agent runtime), and `claude-mem`. It provides a dock-launchable macOS interface for stealthy, high-performance browser automation.
+**unibrowse** is a frontend for a compilation of advanced automation tools: `browser-harness`, `opencode` (the foundational agent runtime), and `claude-mem`. It provides a dock-launchable macOS interface for stealthy, high-performance browser automation.
 
 ## Browser Modes
 

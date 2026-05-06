@@ -4,16 +4,16 @@ This document describes the high-level architecture of **unibrowse**, a dock-lau
 
 ## System Overview
 
-unibrowse acts as a bridge between the user and powerful automation engines like `browser-harness` and `unibrowse-run`. It provides a graphical interface for real-time observation and control while maintaining a stealthy, non-disruptive browser environment.
+unibrowse acts as a bridge between the user and powerful automation engines like `browser-harness` and `opencode`. It provides a graphical interface for real-time observation and control while maintaining a stealthy, non-disruptive browser environment.
 
 ```mermaid
 graph TD
     User([User]) --> GUI[unibrowse GUI - PySide6]
     GUI --> Runner[Agent Runner - Subprocess]
     Runner --> BH[browser-harness CLI]
-    Runner --> UB[unibrowse CLI]
+    Runner --> OC[opencode CLI]
     BH --> Chrome[Stealth Chrome Backend]
-    UB --> Chrome
+    OC --> Chrome
     Chrome --> Screenshot[Live Screenshot - /tmp/unibrowse-live.png]
     Screenshot --> GUI
     Chrome --> Tabs[Tab State]
@@ -35,10 +35,10 @@ Handles the isolation of browser data:
 - **Isolation:** Uses rsync with exclusions (locks, caches, sockets) to ensure the agent profile can run independently.
 - **Remote Sync:** Provides hooks to push local profiles to remote Linux backends.
 
-### 3. Browser Backend - `browser-harness`
-The underlying engine that provides the CDP (Chrome DevTools Protocol) interface. 
-- **Stealth Mode:** Configured with `BH_NO_ACTIVATE=1` to prevent the browser from stealing window focus during automation.
-- **CDP Bridge:** Connects to Chrome on port 9223.
+### 3. Browser Backend - `browser-harness` & `opencode`
+The underlying engines that provide automation and execution.
+- **browser-harness:** Provides the CDP bridge and stealth window management (`BH_NO_ACTIVATE=1`).
+- **opencode:** The foundational agent runtime and execution environment.
 
 ## Data Flow
 
