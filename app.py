@@ -145,7 +145,7 @@ def run_harness(args_or_code, timeout=10, env=None, cwd=HARNESS_DIR):
 
 
 def run_unibrowse_backend(prompt, model="", variant=""):
-    command = [resolve_command("unibrowse"), "run"]
+    command = [resolve_command("opencode"), "run"]
     model = (model or "").strip()
     variant = (variant or "").strip()
     if model:
@@ -932,7 +932,7 @@ class UnibrowseApp(QMainWindow):
             model = self.model_field.text().strip()
             variant = self.variant_field.text().strip()
             harness_cmd = run_unibrowse_backend(prompt, model, variant)
-            fallback_cmd = [resolve_command("unibrowse"), "run", prompt] if model else None
+            fallback_cmd = [resolve_command("opencode"), "run", prompt] if model else None
         try:
             self.output_signal.emit("$ " + " ".join(shlex.quote(x) for x in harness_cmd))
             self.progress_signal.emit("Action: executing command.")
