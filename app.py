@@ -1122,7 +1122,6 @@ class UnibrowseApp(QMainWindow):
                     env=self.current_env(),
                     timeout=30,
                 )
-                self.progress_signal.emit("Observation: live screenshot updated.")
                 self.screenshot_signal.emit(SCREENSHOT_PATH)
             except Exception as e:
                 self.progress_signal.emit(f"Observation failed: screenshot unavailable ({e}).")
