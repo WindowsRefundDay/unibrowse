@@ -1,6 +1,6 @@
 # <img src="assets/logo.svg" width="48" height="48" valign="middle"> unibrowse
 
-Dock-launchable macOS frontend for `browser-harness` and unibrowse.
+Frontend for `browser-harness` with 'opencode' and 'claude-mem' integration.
 
 ## Browser Modes
 
