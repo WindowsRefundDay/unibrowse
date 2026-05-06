@@ -43,5 +43,3 @@ The GUI will send browser-harness/unibrowse commands to that CDP endpoint instea
 - **[OpenCode](https://github.com/opencode-run/opencode):** The foundational agent runtime and execution environment.
 - **[Claude-Mem](https://github.com/claude-mem/claude-mem):** Advanced memory and context management for persistent agent learning.
 - **[PySide6](https://doc.qt.io/qtforpython-6/):** The framework powering the cross-platform GUI.
-- **Antigravity:** Authored by the Antigravity agentic coding assistant.
-
