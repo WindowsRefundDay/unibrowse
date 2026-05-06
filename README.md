@@ -1,6 +1,6 @@
 # <img src="assets/logo.svg" width="48" height="48" valign="middle"> unibrowse
 
-**unibrowse** is a frontend for a compilation of advanced automation tools: `browser-harness`, `opencode` (the foundational agent runtime), and `claude-mem`. It provides a dinterface for high-performance browser automation.
+**unibrowse** is a frontend for a compilation of advanced automation tools: `browser-harness`, `opencode` (the foundational agent runtime), and `claude-mem`. It provides a interface for high-performance browser automation whether on device or server controlling.
 
 ## Browser Modes
 
