@@ -1131,11 +1131,27 @@ class UnibrowseApp(QMainWindow):
         threading.Thread(target=worker).start()
 
     def clean_text(self, text):
-        # Remove ANSI escape sequences
-        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-        return ansi_escape.sub('', text)
+        # Remove ANSI escape sequences (more robust regex)
+        ansi_escape = re.compile(r'(?:\x1B[@-Z\\-_]|[\x80-\x9F]|\x1B\[[0-?]*[ -/]*[@-~])')
+        text = ansi_escape.sub('', text)
+        # Remove other control characters except newline and tab
+        text = "".join(ch for f in text.splitlines(True) for ch in f if ch == '\n' or ch == '\t' or ord(ch) >= 32)
+        return text
 
     def format_markdown(self, text):
+        # If debug is OFF, try to simplify tracebacks
+        if not self.debug_toggle.isChecked() and ("Traceback (most recent call last):" in text or "SyntaxError" in text):
+            lines = text.strip().splitlines()
+            if lines:
+                # The last line usually contains the actual error (e.g. SyntaxError: ...)
+                last_line = lines[-1]
+                return f'<div style="font-family: monospace; color: #ff9aa2; background: #211115; padding: 10px; border-radius: 6px; border-left: 4px solid #7a1b24;"><b>Execution Error:</b> {last_line}</div>'
+
+        # If debug is ON or not a traceback, do regular formatting
+        if "Traceback (most recent call last):" in text or "urllib.error.HTTPError" in text:
+            # Wrap errors in a distinctive style
+            return f'<div style="font-family: monospace; color: #ff9aa2; background: #211115; padding: 10px; border-radius: 6px; border-left: 4px solid #7a1b24;">{text}</div>'
+
         # Simple manual markdown for the terminal-style feed
         # Bold: **text**
         text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
@@ -1147,6 +1163,9 @@ class UnibrowseApp(QMainWindow):
         text = re.sub(r'^[*-]\s+(.*)', r'<div style="margin-left:20px; margin-bottom:6px;">• \1</div>', text, flags=re.MULTILINE)
         # Double newlines for paragraph spacing
         text = text.replace("\n\n", "<br><br>")
+        # Fix weird character spacing/leaks
+        text = text.replace("~~~~^^", " ")
+        text = text.replace("~~~~~", " ")
         return text
 
     def append_activity(self, text, kind):
@@ -1156,8 +1175,12 @@ class UnibrowseApp(QMainWindow):
 
         # Hide non-conversational noise unless debug is on
         if not self.debug_toggle.isChecked():
-            # Hide system prompts, agent signals, and background observation logs
-            if "# Browser Agent Prompt" in stripped or "AGENT_SIGNAL:" in stripped or "Observation:" in stripped:
+            # Hide system prompts, agent signals, background observation logs, and raw tracebacks
+            if ("# Browser Agent Prompt" in stripped 
+                or "AGENT_SIGNAL:" in stripped 
+                or "Observation:" in stripped
+                or "Traceback (most recent call last):" in stripped
+                or 'File "' in stripped and ", line " in stripped):
                 return
             # Hide startup/background progress unless it's an error
             if kind == "progress" and "error" not in stripped.lower() and "failed" not in stripped.lower():
