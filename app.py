@@ -28,7 +28,14 @@ AGENT_PROFILE_ROOT = str(AGENT_PROFILE_ROOT)
 MEMORIES_DIR = str(MEMORIES_DIR)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-HARNESS_DIR = os.path.join(os.path.dirname(APP_DIR), "browser-harness")
+# If running as a frozen bundle, use the resources path
+if getattr(sys, 'frozen', False):
+    # PyInstaller bundle path is Contents/MacOS/app, so resources are in Contents/Resources/
+    # or just adjacent depending on --add-data
+    HARNESS_DIR = os.path.join(APP_DIR, "browser-harness")
+else:
+    HARNESS_DIR = os.path.join(os.path.dirname(APP_DIR), "browser-harness")
+
 AGENT_WORKSPACE = os.path.join(HARNESS_DIR, "agent-workspace")
 SHARED_PROMPT_PATH = os.path.join(AGENT_WORKSPACE, "browser_agent_prompt.md")
 USER_CARD_PATH = os.path.join(AGENT_WORKSPACE, "user_card.md")
@@ -407,6 +414,13 @@ class UnibrowseApp(QMainWindow):
         self.variant_field.setText(DEFAULT_VARIANT)
         model_layout.addWidget(self.variant_field)
         layout.addLayout(model_layout)
+
+        debug_layout = QHBoxLayout()
+        self.debug_toggle = QCheckBox("Show Debug Messages")
+        self.debug_toggle.setChecked(False)
+        debug_layout.addWidget(self.debug_toggle)
+        debug_layout.addStretch()
+        layout.addLayout(debug_layout)
 
     def setup_sidebar(self):
         sidebar = QWidget()
@@ -1127,15 +1141,34 @@ class UnibrowseApp(QMainWindow):
         # Bold: **text**
         text = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', text)
         # Headers: ### Header
-        text = re.sub(r'^### (.*)', r'<h3 style="margin:10px 0 5px 0; color:#ffffff;">\1</h3>', text, flags=re.MULTILINE)
-        # Lists: * Item
-        text = re.sub(r'^\* (.*)', r'<div style="margin-left:15px; margin-bottom:4px;">• \1</div>', text, flags=re.MULTILINE)
+        text = re.sub(r'^### (.*)', r'<h3 style="margin:12px 0 6px 0; color:#ffffff; font-weight:800;">\1</h3>', text, flags=re.MULTILINE)
+        # Lists: 1. Item
+        text = re.sub(r'^(\d+\.)\s+(.*)', r'<div style="margin-left:10px; margin-bottom:8px;"><b>\1</b> \2</div>', text, flags=re.MULTILINE)
+        # Bullet Lists: - Item or * Item
+        text = re.sub(r'^[*-]\s+(.*)', r'<div style="margin-left:20px; margin-bottom:6px;">• \1</div>', text, flags=re.MULTILINE)
+        # Double newlines for paragraph spacing
+        text = text.replace("\n\n", "<br><br>")
         return text
 
     def append_activity(self, text, kind):
         stripped = self.clean_text(text).strip()
         if not stripped:
             return
+
+        # Hide non-conversational noise unless debug is on
+        if not self.debug_toggle.isChecked():
+            # Hide system prompts, agent signals, and background observation logs
+            if "# Browser Agent Prompt" in stripped or "AGENT_SIGNAL:" in stripped or "Observation:" in stripped:
+                return
+            # Hide startup/background progress unless it's an error
+            if kind == "progress" and "error" not in stripped.lower() and "failed" not in stripped.lower():
+                return
+            # Hide initialization/thinking messages
+            if kind == "agent" and (stripped.startswith("Initializing") or stripped.startswith("Thinking") or stripped.startswith("Launching") or "backend found" in stripped):
+                return
+            # Hide raw tool calls
+            if stripped.startswith("[tool_call:"):
+                return
 
         # Handle kind mapping
         color = "#e8eaf0"
@@ -1173,6 +1206,11 @@ class UnibrowseApp(QMainWindow):
             badge_bg = "#15371f"
             card_bg = "#101c14"
             badge = "you"
+        elif stripped.startswith("[tool_call:") or "⚙" in stripped or "✱" in stripped:
+            color = "#a5f3fc"
+            badge_bg = "#083344"
+            card_bg = "#081b25"
+            badge = "tool"
         elif "failed" in stripped.lower() or "error" in stripped.lower():
             color = "#ff9aa2"
             badge_bg = "#441a20"
@@ -1185,7 +1223,7 @@ class UnibrowseApp(QMainWindow):
             formatted_text = self.format_markdown(formatted_text)
 
         # If it's the same kind as before, try to append to the existing card
-        if self.last_kind == kind and self.last_card_id:
+        if self.last_kind == kind and self.last_card_id and kind not in ["command", "tool"]:
             self.activity.moveCursor(QTextCursor.End)
             # Use a slight top margin for continuous flow
             self.activity.insertHtml(f"<div style='color:{color}; font-size:14px; line-height:1.55; white-space:pre-wrap; margin-top:10px;'>{formatted_text}</div>")
