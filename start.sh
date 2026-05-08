@@ -7,8 +7,8 @@ sleep 2
 
 echo "Starting Claude Mem worker..."
 # Ensure memories dir exists
-mkdir -p /app/.memories
-export CLAUDE_MEM_DATA_DIR=/app/.memories
+mkdir -p /app/unibrowse/.memories
+export CLAUDE_MEM_DATA_DIR=/app/unibrowse/.memories
 npx claude-mem start &
 sleep 5
 
@@ -16,7 +16,7 @@ echo "Starting Google Chrome..."
 google-chrome \
     --remote-debugging-address=0.0.0.0 \
     --remote-debugging-port=9223 \
-    --user-data-dir=/app/.profiles \
+    --user-data-dir=/app/unibrowse/.profiles \
     --no-sandbox \
     --disable-dev-shm-usage \
     --disable-gpu \

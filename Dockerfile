@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app/browser-harness
-COPY . /app/browser-harness
+WORKDIR /app/unibrowse
+COPY . /app/unibrowse
 
-RUN pip install -e .
+RUN pip install -e ./browser-harness
 
 EXPOSE 9223
 

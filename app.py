@@ -10,7 +10,101 @@ import html
 import time
 import re
 import json
+import ast
 import keyring
+
+HARNESS_SRC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "browser-harness", "src")
+if HARNESS_SRC_DIR not in sys.path:
+    sys.path.insert(0, HARNESS_SRC_DIR)
+from browser_harness import _ipc as ipc
+from browser_harness.audit_log import audit_log, cleanup_old_logs, hash_text, redact_text
+from browser_harness.run import _sanitize_script
+
+
+class DaemonClient:
+    def __init__(self, name="unibrowse"):
+        self.name = name
+
+    def send(self, req, timeout=10):
+        try:
+            connection, token = ipc.connect(self.name, timeout=timeout)
+            try:
+                return ipc.request(connection, token, req)
+            finally:
+                connection.close()
+        except Exception as e:
+            return {"error": str(e)}
+
+    def run_script(self, code, timeout=10):
+        req = {"method": "Runtime.evaluate", "params": {"expression": code}}
+        return self.send(req, timeout=timeout)
+
+
+class SmartSanitizer:
+    SANITIZER_DEBUG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "sanitizer_debug.log")
+
+    @classmethod
+    def sanitize(cls, script):
+        if not script or not isinstance(script, str):
+            return script, None
+
+        original = script
+        corrections = []
+
+        script = _sanitize_script(script)
+        if script != original:
+            corrections.append("core-sanitize")
+        script = cls._fix_auto_print(script, corrections)
+
+        if corrections:
+            audit_log("sanitizer", data={
+                "corrections": corrections,
+                "original_hash": hash_text(original),
+                "fixed_hash": hash_text(script),
+                "original_snippet": redact_text(original, 240),
+                "fixed_snippet": redact_text(script, 240),
+            })
+            note = "[SANITIZER] Auto-corrected: " + ", ".join(corrections) + ". Using Python syntax."
+        else:
+            note = None
+
+        return script, note
+
+    @classmethod
+    def _fix_auto_print(cls, script, corrections):
+        lines = [l.strip() for l in script.strip().split(";") if l.strip()]
+        if len(lines) > 1:
+            last = lines[-1]
+            if last and not last.startswith(("print", "if", "for", "while", "def", "class", "import", "from", "return")):
+                try:
+                    parseable = ast.parse(last, mode="eval")
+                    if isinstance(parseable.body, (ast.Call, ast.Name, ast.Attribute)):
+                        lines[-1] = f"print({last})"
+                        corrections.append("auto-print")
+                except Exception:
+                    pass
+        return ";".join(lines)
+
+    @classmethod
+    def _log_failure(cls, original, fixed, corrections):
+        audit_log("sanitizer_failure", level="warning", data={
+            "corrections": corrections,
+            "original_hash": hash_text(original),
+            "fixed_hash": hash_text(fixed),
+            "original_snippet": redact_text(original, 240),
+            "fixed_snippet": redact_text(fixed, 240),
+        })
+        try:
+            os.makedirs(os.path.dirname(cls.SANITIZER_DEBUG), exist_ok=True)
+            with open(cls.SANITIZER_DEBUG, "a") as f:
+                f.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"ORIGINAL_HASH: {hash_text(original)}\n")
+                f.write(f"FIXED_HASH: {hash_text(fixed)}\n")
+                f.write(f"ORIGINAL_SNIPPET: {redact_text(original, 240)}\n")
+                f.write(f"FIXED_SNIPPET: {redact_text(fixed, 240)}\n")
+                f.write(f"CORRECTIONS: {corrections}\n\n")
+        except Exception:
+            pass
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QLabel,
                              QCheckBox, QSplitter, QComboBox, QListWidget, QListWidgetItem,
@@ -29,14 +123,10 @@ MEMORIES_DIR = str(MEMORIES_DIR)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 # If running as a frozen bundle, use the resources path
-if getattr(sys, 'frozen', False):
-    # PyInstaller bundle path is Contents/MacOS/app, so resources are in Contents/Resources/
-    # or just adjacent depending on --add-data
-    HARNESS_DIR = os.path.join(APP_DIR, "browser-harness")
-else:
-    HARNESS_DIR = os.path.join(os.path.dirname(APP_DIR), "browser-harness")
+HARNESS_DIR = os.path.join(APP_DIR, "browser-harness")
 
 AGENT_WORKSPACE = os.path.join(HARNESS_DIR, "agent-workspace")
+HARNESS_OPENCODE_DIR = os.path.join(APP_DIR, ".opencode-harness")
 SHARED_PROMPT_PATH = os.path.join(AGENT_WORKSPACE, "browser_agent_prompt.md")
 USER_CARD_PATH = os.path.join(AGENT_WORKSPACE, "user_card.md")
 BROWSER_PORT = "9223"
@@ -54,8 +144,8 @@ def get_version():
     return "v0.0.1-dev"
 
 VERSION = get_version()
-DEFAULT_MODEL = os.environ.get("UNIBROWSE_MODEL", "google/antigravity-gemini-3-flash")
-DEFAULT_VARIANT = os.environ.get("UNIBROWSE_VARIANT", "")
+DEFAULT_MODEL = os.environ.get("UNIBROWSE_MODEL", "google/gemini-3-flash")
+DEFAULT_VARIANT = os.environ.get("UNIBROWSE_VARIANT", "minimal")
 DEFAULT_PATH = ":".join(
     [
         os.path.expanduser("~/.local/bin"),
@@ -104,6 +194,15 @@ def agent_env():
     env["BU_NAME"] = "unibrowse"
     env["BH_AGENT_WORKSPACE"] = AGENT_WORKSPACE
     env["CLAUDE_MEM_DATA_DIR"] = MEMORIES_DIR
+    # Isolate harness OpenCode from global config (no OMO, separate session DB).
+    # The setup script also writes .opencode-harness/bin wrappers for opencode
+    # and browser-harness, keeping both runtimes pointed at unibrowse-local state.
+    if os.path.isdir(HARNESS_OPENCODE_DIR):
+        harness_bin = os.path.join(HARNESS_OPENCODE_DIR, "bin")
+        if os.path.isdir(harness_bin) and harness_bin not in env["PATH"].split(":"):
+            env["PATH"] = f"{harness_bin}:{env['PATH']}"
+        env["XDG_CONFIG_HOME"] = os.path.join(HARNESS_OPENCODE_DIR, "config")
+        env["XDG_DATA_HOME"] = os.path.join(HARNESS_OPENCODE_DIR, "data")
     return env
 
 
@@ -148,19 +247,30 @@ def summarize_tab(tab):
 
 
 def run_harness(args_or_code, timeout=10, env=None, cwd=HARNESS_DIR):
-    command = [resolve_command("browser-harness")]
-    if isinstance(args_or_code, str):
-        command.extend(["-c", args_or_code])
+    started = time.time()
+    mode = "args"
+    if isinstance(args_or_code, str) and args_or_code.startswith("-"):
+        command = [resolve_command("browser-harness")] + shlex.split(args_or_code)
+    elif isinstance(args_or_code, str):
+        mode = "code"
+        command = [resolve_command("browser-harness"), "-c", args_or_code]
     else:
-        command.extend(list(args_or_code))
-    return subprocess.check_output(
+        command = [resolve_command("browser-harness")] + list(args_or_code)
+    audit_log("harness_run_start", data={"mode": mode, "command": command, "timeout": timeout, "cwd": cwd})
+    try:
+        output = subprocess.check_output(
         command,
         stderr=subprocess.STDOUT,
         text=True,
         env=env or agent_env(),
         cwd=cwd,
         timeout=timeout,
-    )
+        )
+        audit_log("harness_run_finish", data={"mode": mode, "returncode": 0, "duration_ms": int((time.time() - started) * 1000), "output_len": len(output)})
+        return output
+    except subprocess.CalledProcessError as e:
+        audit_log("harness_run_finish", level="error", data={"mode": mode, "returncode": e.returncode, "duration_ms": int((time.time() - started) * 1000), "output": e.output})
+        raise
 
 
 def run_unibrowse_backend(prompt, model="", variant=""):
@@ -275,9 +385,12 @@ class UnibrowseApp(QMainWindow):
         self.init_agent()
 
     def initialize_state(self):
+        cleanup_old_logs()
+        audit_log("app_start", data={"version": VERSION, "model": self.model_field.text().strip() if hasattr(self, "model_field") else DEFAULT_MODEL})
         self.current_tabs = []
         self.active_tab_id = None
         self.tabs_busy = False
+        self.daemon_client = DaemonClient()
         self.current_process = None
         self.stop_requested = False
         self.autotest_started = False
@@ -740,29 +853,31 @@ class UnibrowseApp(QMainWindow):
                     url = server_ip if server_ip.startswith("http") else f"http://{server_ip}"
                 
                 env["BU_CDP_URL"] = url
-                env["OPENCODE_AGENT_CDP_URL"] = url
         return env
 
     def build_runtime_context(self):
+        env_url = self.current_env().get('BU_CDP_URL', BU_CDP_URL)
         lines = [
-            "Runtime Context:",
-            f"- Browser mode: {self.browser_mode.currentText()}",
-            "- Stealth/background: BH_NO_ACTIVATE=1",
-            f"- CDP URL: {self.current_env().get('BU_CDP_URL', BU_CDP_URL)}",
+            f"Runtime: mode={self.browser_mode.currentText()} cdp={env_url}",
         ]
         visible_tabs = []
         for index, tab in enumerate(self.current_tabs):
             if is_internal_tab(tab):
                 continue
             target_id = tab.get("targetId") or "unknown"
-            active_marker = " active" if target_id == self.active_tab_id else ""
-            visible_tabs.append(f"  - [{index}] {summarize_tab(tab)}{active_marker} | id={target_id}")
+            active = "*" if target_id == self.active_tab_id else " "
+            title = (tab.get("title") or "Untitled")[:40]
+            url = tab.get("url", "")
+            visible_tabs.append(f"| {index} | {active} | {title} | {url} |")
+        
         if visible_tabs:
-            lines.append("- Current tabs:")
-            lines.extend(visible_tabs[:12])
+            lines.append("| # | Act | Title | URL |")
+            lines.append("|---|---|---|---|")
+            lines.extend(visible_tabs[:8]) # Max 8 tabs for token efficiency
         else:
-            lines.append("- Current tabs: not loaded; use page_info/list_tabs if tab state matters")
-        lines.append(f"- Live screenshot path: {SCREENSHOT_PATH}")
+            lines.append("(No active tabs)")
+        
+        lines.append(f"Screenshot: {SCREENSHOT_PATH}")
         return "\n".join(lines)
 
     def fetch_dynamic_context(self, task, domain):
@@ -848,23 +963,16 @@ class UnibrowseApp(QMainWindow):
 
         def worker():
             try:
-                # Get tab list and current page info to find active tab
-                script = "import json; print(json.dumps({'tabs': list_tabs(), 'current': page_info()}))"
-                res = run_harness(script, env=self.current_env(), timeout=10)
-                data = json.loads(res.strip())
-                tabs = data.get('tabs', [])
-                current_url = data.get('current', {}).get('url', '')
+                targets = self.daemon_client.send({"method": "Target.getTargets"})
+                if "error" in targets:
+                    raise RuntimeError(targets["error"])
                 
-                # Try to find which tab matches the current page info
-                active_id = ""
-                for t in tabs:
-                    if t.get('url') == current_url:
-                        active_id = t.get('targetId')
-                        break
-
+                status = self.daemon_client.send({"meta": "connection_status"})
+                active_id = status.get("target_id", "")
+                
+                tabs = targets["result"]["targetInfos"]
                 self.tabs_signal.emit(tabs, active_id)
             except Exception as e:
-                # Log to stdout but don't disrupt UI flow
                 print(f"Tab sync background error: {e}")
             finally:
                 self.tabs_busy = False
@@ -937,6 +1045,7 @@ class UnibrowseApp(QMainWindow):
         threading.Thread(target=worker).start()
 
     def execute_agent_task(self, task):
+        audit_log("task_start", data={"task": redact_text(task, 240), "task_hash": hash_text(task)})
         self.output_signal.emit("Agent thinking...")
         self.task_running = True
         self.stop_requested = False
@@ -967,10 +1076,13 @@ class UnibrowseApp(QMainWindow):
                 if self.stop_requested:
                     self.finish_task("error", "STOPPED", "Task stopped by user.")
                     return
-                raise subprocess.CalledProcessError(result.returncode, harness_cmd, result.output)
+                raise subprocess.CalledProcessError(result.returncode, harness_cmd, result.stdout)
             self.finish_task("done", "DONE", "Task complete: command finished.")
+        except KeyboardInterrupt:
+            self.output_signal.emit("Task stopped by user.")
+            self.finish_task("error", "STOPPED", "Task stopped by user.")
         except subprocess.CalledProcessError as e:
-            if task and not task.startswith(("bh:", "url:")) and "ProviderModelNotFoundError" in e.output and fallback_cmd:
+            if task and not task.startswith(("bh:", "url:")) and "ProviderModelNotFoundError" in e.stdout and fallback_cmd:
                 self.output_signal.emit("Selected model was not found. Retrying with unibrowse default model...")
                 self.progress_signal.emit("Recovery: selected model unavailable; retrying with unibrowse default.")
                 try:
@@ -980,7 +1092,7 @@ class UnibrowseApp(QMainWindow):
                         if self.stop_requested:
                             self.finish_task("error", "STOPPED", "Task stopped by user.")
                             return
-                        raise subprocess.CalledProcessError(result.returncode, fallback_cmd, result.output)
+                        raise subprocess.CalledProcessError(result.returncode, fallback_cmd, result.stdout)
                     self.finish_task("done", "DONE", "Task complete: command finished with fallback model.")
                     return
                 except subprocess.CalledProcessError as fallback_error:
@@ -1003,10 +1115,14 @@ class UnibrowseApp(QMainWindow):
         self.current_process = process
         try:
             for line in process.stdout:
+                if self.stop_requested:
+                    process.kill()
+                    process.wait()
+                    raise KeyboardInterrupt("Task stopped by user")
                 output.append(line)
                 self.output_signal.emit(line.rstrip())
             returncode = process.wait(timeout=600)
-        except Exception:
+        except (KeyboardInterrupt, Exception):
             if process:
                 process.kill()
                 process.wait()
@@ -1090,7 +1206,8 @@ class UnibrowseApp(QMainWindow):
             self.stop_requested = True
             self.stop_btn.setEnabled(False)
             try:
-                self.current_process.terminate()
+                self.current_process.kill()
+                self.current_process.wait()
             except Exception:
                 pass
 
@@ -1117,12 +1234,21 @@ class UnibrowseApp(QMainWindow):
 
         def worker():
             try:
-                run_harness(
-                    f"ensure_real_tab(); capture_screenshot({SCREENSHOT_PATH!r})",
-                    env=self.current_env(),
-                    timeout=30,
-                )
-                self.screenshot_signal.emit(SCREENSHOT_PATH)
+                status = self.daemon_client.send({"meta": "connection_status"})
+                sid = status.get("session_id")
+                
+                res = self.daemon_client.send({
+                    "method": "Page.captureScreenshot",
+                    "params": {"format": "png", "quality": 50},
+                    "session_id": sid
+                }, timeout=30)
+                
+                if "result" in res and "data" in res["result"]:
+                    import base64
+                    img_data = base64.b64decode(res["result"]["data"])
+                    with open(SCREENSHOT_PATH, "wb") as f:
+                        f.write(img_data)
+                    self.screenshot_signal.emit(SCREENSHOT_PATH)
             except Exception as e:
                 self.progress_signal.emit(f"Observation failed: screenshot unavailable ({e}).")
             finally:
@@ -1179,6 +1305,8 @@ class UnibrowseApp(QMainWindow):
             if ("# Browser Agent Prompt" in stripped 
                 or "AGENT_SIGNAL:" in stripped 
                 or "Observation:" in stripped
+                or "claude-mem" in stripped.lower()
+                or "plugin loading" in stripped.lower()
                 or "Traceback (most recent call last):" in stripped
                 or 'File "' in stripped and ", line " in stripped):
                 return

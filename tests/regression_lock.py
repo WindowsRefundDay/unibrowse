@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 
 # Add paths for imports
-ROOT = Path("/Users/joelmanuel/browser-harness-folder")
-sys.path.insert(0, str(ROOT / "unibrowse"))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "browser-harness" / "agent-workspace"))
 
 import app

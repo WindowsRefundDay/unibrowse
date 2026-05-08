@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get update && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-COPY . /app
+WORKDIR /app/unibrowse
+COPY . /app/unibrowse
 
 # Install dependencies
 RUN pip install --no-cache-dir keyring PySide6 cryptography

@@ -6,3 +6,8 @@ __pycache__/
 .memories/
 *.png
 *.log
+
+.logs/
+.opencode-harness/
+browser-harness/chrome-user-data/
+browser-harness/downloads/

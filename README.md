@@ -19,6 +19,14 @@ open "/Applications/unibrowse.app"
 
 You can also find **unibrowse** in your macOS Applications folder and add it to your Dock.
 
+### Development
+
+To run the app directly from source without compiling:
+
+```bash
+./launch.sh
+```
+
 ## Remote Mode
 
 Enable `Remote backend` in the GUI and enter a CDP URL such as:
@@ -34,7 +42,7 @@ The GUI will send browser-harness/unibrowse commands to that CDP endpoint instea
 - `bh: print(page_info())` runs raw browser-harness Python.
 - `url: https://example.com` opens a URL through browser-harness.
 - Any other text is sent to `unibrowse run` with browser-harness stealth environment variables.
-- The model field defaults to `google/antigravity-gemini-3-flash`. Edit it if your unibrowse provider uses a different exact model ID.
+- The model field defaults to `google/gemini-3-flash`. Edit it if your unibrowse provider uses a different exact model ID.
 - The progress panel shows concise task/reasoning summaries, not private chain-of-thought.
 
 ## Credits & Acknowledgements

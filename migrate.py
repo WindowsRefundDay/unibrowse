@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 # Project-Local Paths
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parent
 PERSONAL_PROFILE_ROOT = Path.home() / "Library/Application Support/Google/Chrome"
 PERSONAL_PROFILE = PERSONAL_PROFILE_ROOT / "Default"
 
@@ -25,49 +25,41 @@ SYNC_EXCLUDES = [
     "BrowserMetrics*",
     "Session Storage*",
     "Sessions*",
+    "Service Worker*",
+    "ScriptCache*",
+    "DawnWebGPUCache*",
+    "Local Storage*",
 ]
 
 
 def _rsync_update(src, dest):
+    if not src.exists():
+        return
     dest.mkdir(parents=True, exist_ok=True)
-    cmd = ["rsync", "-a", "--update"]
+    cmd = ["rsync", "-a", "--update", "--delete"]
     for pattern in SYNC_EXCLUDES:
         cmd.extend(["--exclude", pattern])
     cmd.extend([str(src) + "/", str(dest) + "/"])
     subprocess.run(cmd, check=True)
+
 
 def ensure_agent_profile():
     src = PERSONAL_PROFILE
     dest = AGENT_PROFILE
     
     if dest.exists():
-        print(f"Profile already exists at {dest}. Skipping sync; use on-demand sync when needed.")
         return str(dest.parent)
     
-    print(f"Migrating Chrome profile from {src} to {dest}...")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    
-    # We use rsync via subprocess for efficiency and to handle macOS permissions better
-    try:
-        _rsync_update(src, dest)
-        print("Migration successful.")
-    except Exception as e:
-        print(f"Migration failed: {e}")
-        # Fallback to simple copy if rsync fails
-        try:
-            shutil.copytree(src, dest, ignore=shutil.ignore_patterns('Singleton*', '*Lock*', 'Cache*'))
-        except Exception as e2:
-            print(f"Fallback migration failed: {e2}")
-            
+    print(f"Initial migration from {src} to {dest}...")
+    _rsync_update(src, dest)
     return str(dest.parent)
 
 
 def sync_profiles():
     src = PERSONAL_PROFILE
     dest = AGENT_PROFILE
-    if not dest.exists():
-        ensure_agent_profile()
 
+    # One-pass sync handles everything efficiently
     print("Syncing personal Chrome profile and agent profile...")
     _rsync_update(src, dest)
     _rsync_update(dest, src)
